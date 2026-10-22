@@ -153,7 +153,7 @@ let PRODUCTS = [
   { name: "Produk Contoh 2", desc: "Keterangan singkat produk kedua.", price: 50000, url: "https://example.com/produk-2" },
   { name: "Produk Contoh 3", desc: "Produk yang stoknya sedang habis.", price: 75000, url: "https://example.com/produk-3", soldOut: true }
 ];
-/* ---- DAFTAR SERVER (maksimal 10, ubah kapan saja) ----
+/* ---- DAFTAR SERVER (maksimal 30, ubah kapan saja) ----
    name: nama server (kosongkan "" kalau slot tidak dipakai, otomatis disembunyikan)
    desc: keterangan singkat
    ip  : alamat server, pengunjung bisa menyalinnya dengan satu klik (boleh dikosongkan)
@@ -240,7 +240,7 @@ const RENDER = {
         ${x.soldOut ? '<span class="buy sold">Habis</span>' : `<a class="buy" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">Beli</a>`}</div>
       </div>
     </div>`).join("") : "",
-  server: () => SERVERS.slice(0, 10).filter(x => x.name && x.name.trim()).map(x => `
+  server: () => SERVERS.slice(0, 30).filter(x => x.name && x.name.trim()).map(x => `
     <div class="prod">${thumb(x)}
       <div class="pinfo"><b>${esc(x.name)}</b><small>${esc(x.desc || "")}</small>
         <div class="pbuy"><span class="addr">${esc(x.ip || "")}</span>
@@ -369,7 +369,7 @@ if (CONFIG.music) {
     harga: [["name", "Nama produk"], ["desc", "Keterangan singkat"], ["price", "Harga (angka saja, contoh 25000)", "number"], ["url", "Link beli"], ["image", "URL gambar (opsional)"]],
     server: [["name", "Nama server"], ["desc", "Keterangan singkat"], ["ip", "Alamat server"], ["url", "Link gabung"], ["image", "URL logo (opsional)"]]
   };
-  const MAX = { harga: 50, server: 10 };
+  const MAX = { harga: 50, server: 30 };
   const blank = t => t === "harga" ? { name: "", desc: "", price: "", url: "" } : { name: "", desc: "", ip: "", url: "" };
   const clone = a => JSON.parse(JSON.stringify(a || []));
 
@@ -495,21 +495,21 @@ on conflict (key) do nothing;`;
         <button type="button" class="tab ${tab === "harga" ? "on" : ""}" data-tab="harga">List Harga</button>
         <button type="button" class="tab ${tab === "server" ? "on" : ""}" data-tab="server">Server</button></div>
       <div class="apad">${list.map(row).join("") || '<p class="amsg">Belum ada isi. Tekan Tambah.</p>'}</div>
-      <div class="afoot"><p class="amsg ${bad ? "err" : ""}" id="emsg">${esc(msg || (tab === "server" ? "Maksimal 10 server. Baris tanpa nama tidak disimpan." : "Baris tanpa nama tidak disimpan."))}</p>
+      <div class="afoot"><p class="amsg ${bad ? "err" : ""}" id="emsg">${esc(msg || (tab === "server" ? "Maksimal 30 server. Baris tanpa nama tidak disimpan." : "Baris tanpa nama tidak disimpan."))}</p>
         <div class="abtns">
           <button type="button" class="btn ghost" data-act="add" ${list.length >= MAX[tab] ? "disabled" : ""}>Tambah</button>
           <button type="button" class="btn pri" data-act="save">Simpan</button>
           ${LOCAL ? '<button type="button" class="btn ghost" data-act="dl">Unduh index.html</button>' : ""}
           <button type="button" class="btn ghost" data-act="out">Keluar</button></div></div>`;
   }
-  function openEditor() { draft = { harga: clone(PRODUCTS), server: clone(SERVERS) }; tab = "harga"; renderEditor(); }
+  function openEditor() { const nm = a => clone(a).filter(x => x.name && String(x.name).trim()); draft = { harga: nm(PRODUCTS), server: nm(SERVERS) }; tab = "harga"; renderEditor(); }
 
   async function doSave() {
     const m = $("emsg"); m.className = "amsg"; m.textContent = "Menyimpan...";
     try {
       for (const t of ["harga", "server"]) {
         let arr = draft[t].filter(x => x.name && String(x.name).trim());
-        if (t === "server") arr = arr.slice(0, 10);
+        if (t === "server") arr = arr.slice(0, 30);
         if (t === "harga") arr = arr.map(x => Object.assign({}, x, { soldOut: !!x.soldOut }));
         await save(t, arr);
         draft[t] = arr; if (t === "harga") PRODUCTS = arr; else SERVERS = arr;
@@ -525,7 +525,7 @@ on conflict (key) do nothing;`;
   }
 
   async function download() {
-    const clean = t => { let a = draft[t].filter(x => x.name && String(x.name).trim()); if (t === "server") a = a.slice(0, 10); if (t === "harga") a = a.map(x => Object.assign({}, x, { soldOut: !!x.soldOut })); return a; };
+    const clean = t => { let a = draft[t].filter(x => x.name && String(x.name).trim()); if (t === "server") a = a.slice(0, 30); if (t === "harga") a = a.map(x => Object.assign({}, x, { soldOut: !!x.soldOut })); return a; };
     const H2 = clean("harga"), S2 = clean("server");
     const fmt = (n, a) => "let " + n + " = " + JSON.stringify(a, null, 2) + ";";
     try {
@@ -552,7 +552,12 @@ on conflict (key) do nothing;`;
     const t = e.target.closest("[data-tab],[data-act]"); if (!t || !draft) return;
     if (t.dataset.tab) { tab = t.dataset.tab; renderEditor(); return; }
     const a = t.dataset.act;
-    if (a === "add") { draft[tab].push(blank(tab)); renderEditor(); }
+    if (a === "add") {
+      if (draft[tab].length >= MAX[tab]) return;
+      draft[tab].push(blank(tab)); renderEditor();
+      const rows = body.querySelectorAll(".arow"), last = rows[rows.length - 1];
+      if (last) { last.scrollIntoView({ block: "center" }); const f = last.querySelector("input"); if (f) f.focus({ preventScroll: true }); }
+    }
     else if (a === "del") { draft[tab].splice(+t.dataset.i, 1); renderEditor(); }
     else if (a === "save") doSave();
     else if (a === "dl") download();
